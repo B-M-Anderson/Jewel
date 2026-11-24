@@ -1,4 +1,3 @@
-
 function make_attack_tables()
  knight_attacks = zeros(UInt64, 64)
  king_attacks = zeros(UInt64, 64)

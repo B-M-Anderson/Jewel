@@ -6,5 +6,6 @@ include("board.jl")
 include("fen.jl")
 include("display.jl")
 include("attacks.jl")
+include("moves.jl")
 
 end
