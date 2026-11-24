@@ -1,0 +1,12 @@
+name = "Jewel"
+uuid = "f2847e4a-cc00-4517-81cb-aef5a676f5b3"
+version = "0.1.0"
+authors = ["Bennett Anderson <bennetta32.30@gmail.com>"]
+
+[deps]
+BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+Revise = "295af30f-e4ad-537b-8983-00126c2a3abe"
+
+[compat]
+BenchmarkTools = "1.8.0"
+Revise = "3.18.0"
