@@ -90,7 +90,7 @@ black = UInt64(0)
     halfmove_clock = parse(UInt8, parts[5])
     fullmove_number = parse(UInt16, parts[6])
 
-    return Board(pawns, knights, queens, bishops, rooks, kings,
+    return Board(pawns, knights, bishops, rooks, queens, kings,
                  black, white,
                  white_castle_kingside, white_castle_queenside,
                  black_castle_kingside, black_castle_queenside,

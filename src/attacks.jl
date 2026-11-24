@@ -74,3 +74,36 @@ function sliding_attacks(sq, occupied, dirs)
 
     return attacks
 end
+
+function is_square_attacked(board::Board, sq::Int, by_white::Bool)::Bool
+    attacker = by_white ? board.white : board.black
+    occupied = board.white | board.black
+
+    # 1. Pawns (reverse direction!)
+    pawn_mask = by_white ? BLACK_PAWN_ATTACKS[sq + 1] : WHITE_PAWN_ATTACKS[sq + 1]
+    if (pawn_mask & board.pawns & attacker) != 0
+        return true
+    end
+
+    # 2. Knights
+    if (KNIGHT_ATTACKS[sq + 1] & board.knights & attacker) != 0
+        return true
+    end
+
+    # 3. Kings
+    if (KING_ATTACKS[sq + 1] & board.kings & attacker) != 0
+        return true
+    end
+
+    # 4. Rooks and Queens (orthogonal rays)
+    if (sliding_attacks(sq, occupied, ROOK_DIRS) & (board.rooks | board.queens) & attacker) != 0
+        return true
+    end
+
+    # 5. Bishops and Queens (diagonal rays)
+    if (sliding_attacks(sq, occupied, BISHOP_DIRS) & (board.bishops | board.queens) & attacker) != 0
+        return true
+    end
+
+    return false
+end

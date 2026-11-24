@@ -1,9 +1,9 @@
-mutable struct Board
+struct Board
     pawns::UInt64
     knights::UInt64
-    queens::UInt64
     bishops::UInt64
     rooks::UInt64
+    queens::UInt64
     kings::UInt64
 
     black::UInt64
