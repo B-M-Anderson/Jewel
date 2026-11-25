@@ -18,3 +18,5 @@ function evaluate(board::Board)
         return -sum(WEIGHTS[i] * features[i] for i in 1:5)
     end
 end
+
+
