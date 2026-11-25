@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Play Jewel</title>
+<style>
+  :root { --bs: min(88vw, 560px); }
+  html, body { background:#16181c; color:#e8e8e8; margin:0; font-family:system-ui, "Segoe UI", sans-serif; }
+  #app { display:flex; flex-wrap:wrap; gap:26px; padding:20px; justify-content:center; align-items:flex-start; }
+
+  /* ---------- board: every square is exactly the same size ---------- */
+  #stage { display:flex; gap:10px; align-items:flex-start; }
+  #evalcol { display:flex; flex-direction:column; align-items:center; gap:6px; width:44px; }
+  #ebLabel { font-size:12px; font-family:Consolas, monospace; height:16px; }
+  #evalbar { width:26px; height:var(--bs); display:flex; flex-direction:column; border:2px solid #3a3d44; border-radius:4px; overflow:hidden; background:#888; }
+  #ebTop { background:#1c1c1c; transition:height .5s; }
+  #ebBot { background:#f2f2f2; flex:1; }
+  #boardwrap { position:relative; width:var(--bs); height:var(--bs); }
+  #board { width:var(--bs); height:var(--bs); display:grid; grid-template-columns:repeat(8, minmax(0, 1fr)); grid-template-rows:repeat(8, minmax(0, 1fr)); border:3px solid #3a3d44; box-sizing:content-box; }
+  .sq { position:relative; min-width:0; min-height:0; overflow:hidden; display:flex; align-items:center; justify-content:center; cursor:pointer; user-select:none; line-height:1; font-size:calc(var(--bs) / 8 * 0.8); }
+  .sq.light { background-color:#f0d9b5; }
+  .sq.dark  { background-color:#b58863; }
+  .sq.last  { background-image:linear-gradient(rgba(255,235,59,.45), rgba(255,235,59,.45)); }
+  .sq.sel   { background-image:linear-gradient(rgba(60,160,255,.6), rgba(60,160,255,.6)); }
+  .sq.aw    { box-shadow:inset 0 0 0 100px rgba(40,120,255,.32); }
+  .sq.ab    { box-shadow:inset 0 0 0 100px rgba(235,50,50,.32); }
+  .sq.awb   { box-shadow:inset 0 0 0 100px rgba(170,60,220,.40); }
+  .sq.tgt::after { content:""; position:absolute; width:26%; height:26%; border-radius:50%; background:rgba(20,110,60,.65); pointer-events:none; }
+  .pc { z-index:1; }
+  .pc.w { color:#ffffff; text-shadow:0 0 2px #000, 0 0 2px #000, 0 0 3px #000, 0 0 3px #000; }
+  .pc.b { color:#111111; }
+  .co { position:absolute; font-size:11px; font-weight:700; font-family:system-ui, sans-serif; z-index:2; pointer-events:none; }
+  .co.rk { top:2px; left:3px; }
+  .co.fl { bottom:1px; right:3px; }
+  .dark .co { color:#f0d9b5; }
+  .light .co { color:#b58863; }
+  #arrows { position:absolute; left:3px; top:3px; width:var(--bs); height:var(--bs); pointer-events:none; z-index:5; }
+  #promo { display:none; position:absolute; inset:0; background:rgba(0,0,0,.7); align-items:center; justify-content:center; gap:10px; flex-wrap:wrap; z-index:9; }
+  #toggles { margin:0 0 10px 54px; font-size:14px; display:flex; gap:14px; flex-wrap:wrap; align-items:center; }
+  #legend { margin:8px 0 0 54px; font-size:12px; color:#9aa; max-width:var(--bs); min-height:16px; }
+
+  /* ---------- side panel ---------- */
+  #panel { width:350px; max-width:92vw; }
+  #panel h1 { margin:0 0 12px; font-size:22px; }
+  .row { margin:10px 0; }
+  label { margin-right:10px; }
+  select, button { background:#2b2e35; color:#e8e8e8; border:1px solid #4a4e57; border-radius:6px; padding:7px 12px; font-size:14px; cursor:pointer; }
+  button:hover { background:#383c45; }
+  #status { font-size:18px; font-weight:600; min-height:26px; margin:14px 0 4px; }
+  #info { color:#aab; font-size:13px; min-height:18px; }
+  #moves { margin-top:10px; font-family:Consolas, monospace; font-size:13px; line-height:1.6; max-height:110px; overflow:auto; background:#22252a; padding:8px 10px; border-radius:6px; }
+  details { background:#1f2227; border:1px solid #30343b; border-radius:8px; margin-top:10px; padding:8px 12px; }
+  summary { cursor:pointer; font-weight:600; font-size:14px; }
+  table { border-collapse:collapse; width:100%; font-size:13px; margin-top:8px; font-family:Consolas, monospace; }
+  th, td { text-align:right; padding:3px 6px; border-bottom:1px solid #2c3037; }
+  th:first-child, td:first-child { text-align:left; }
+  th { color:#9aa; font-weight:600; }
+  .bar { height:9px; background:#4aa3ff; border-radius:2px; min-width:2px; }
+  .hint { color:#8a93a0; font-size:12px; margin-top:6px; }
+  #bbs { display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin-top:8px; }
+  .bbcell { text-align:center; font-size:11px; font-family:Consolas, monospace; color:#b9c0cc; }
+  .bbcell svg { width:100%; height:auto; background:#15171a; border:1px solid #30343b; }
+  #graph svg { width:100%; height:auto; background:#15171a; border:1px solid #30343b; border-radius:4px; margin-top:8px; }
+  #note { color:#8a93a0; font-size:12px; margin-top:14px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="left">
+    <div id="toggles">
+      <label><input type="checkbox" id="tAtt" onchange="toggleChanged()"> Attack map</label>
+      <label><input type="checkbox" id="tCand" onchange="toggleChanged()"> Jewel's view of your moves</label>
+      <label>search depth
+        <select id="cDepth" onchange="toggleChanged()">
+          <option value="2">2</option><option value="3" selected>3</option><option value="4">4</option>
+        </select>
+      </label>
+    </div>
+    <div id="stage">
+      <div id="evalcol"><div id="ebLabel"></div><div id="evalbar"><div id="ebTop"></div><div id="ebBot"></div></div></div>
+      <div id="boardwrap">
+        <div id="board"></div>
+        <svg id="arrows" viewBox="0 0 800 800"></svg>
+        <div id="promo"></div>
+      </div>
+    </div>
+    <div id="legend"></div>
+  </div>
+
+  <div id="panel">
+    <h1>Play Jewel</h1>
+    <div class="row">
+      <label><input type="radio" name="color" value="w" checked> White</label>
+      <label><input type="radio" name="color" value="b"> Black</label>
+      <label><input type="radio" name="color" value="r"> Random</label>
+    </div>
+    <div class="row">
+      Jewel thinks for
+      <select id="ms">
+        <option value="200">0.2 s</option>
+        <option value="1000" selected>1 s</option>
+        <option value="3000">3 s</option>
+        <option value="10000">10 s</option>
+      </select>
+    </div>
+    <div class="row">
+      <button onclick="newGame()">New game</button>
+      <button onclick="resign()">Resign</button>
+    </div>
+    <div id="status"></div>
+    <div id="info"></div>
+    <div id="moves"></div>
+
+    <details open id="dThink"><summary>Jewel's search, depth by depth</summary>
+      <div id="think"></div>
+      <div class="hint">Each depth redoes the whole search one level deeper. The time column is that depth alone; the bar is its size on a log scale; "x prev" is how many times costlier it was than the depth before.</div>
+    </details>
+    <details open><summary>Evaluation over the game</summary>
+      <div id="graph"></div>
+      <div class="hint">Gray line: static material evaluation. Dots: Jewel's search score after its moves. White's point of view, clipped to ±6 pawns.</div>
+    </details>
+    <details open><summary>Features × weights</summary>
+      <div id="feat"></div>
+      <div class="hint">This is evaluate(): material features (White minus Black) times the weights in eval.jl. When you tune the weights, this table changes.</div>
+    </details>
+    <details><summary>Move ordering (what gets searched first)</summary>
+      <div id="order"></div>
+      <div class="hint">Captures first, most valuable victim taken by the least valuable attacker. Good ordering is why alpha-beta cuts so much.</div>
+    </details>
+    <details><summary>Bitboards (the raw board)</summary>
+      <div id="bbs"></div>
+      <div class="hint">Each board is one UInt64. Bit 0 is a1 (bottom left), bit 63 is h8 (top right). Hex shown below each.</div>
+    </details>
+    <div id="note">Finished games are saved to play/data/ as training positions. Starting a new game before the old one finishes discards the old one.</div>
+  </div>
+</div>
+
+<script>
+const FILES = "abcdefgh";
+const GLYPH = { k:"♚", q:"♛", r:"♜", b:"♝", n:"♞", p:"♟" };
+const PNAMES = ["Pawns", "Knights", "Bishops", "Rooks", "Queens"];
+let S = null, A = null, sel = null, busy = false;
+
+const $ = id => document.getElementById(id);
+
+async function api(path) {
+  try {
+    const r = await fetch(path);
+    return await r.json();
+  } catch (e) {
+    return { error: "cannot reach the Jewel server (is play/server.jl running?)" };
+  }
+}
+
+function parseFen(fen) {
+  const rows = fen.split(" ")[0].split("/");
+  const b = [];
+  for (let i = 0; i < 8; i++) {
+    const rank = 7 - i;
+    b[rank] = [];
+    for (const ch of rows[i]) {
+      if (/\d/.test(ch)) { for (let k = 0; k < +ch; k++) b[rank].push(""); }
+      else b[rank].push(ch);
+    }
+  }
+  return b;
+}
+
+function fmtScore(cp) {
+  if (Math.abs(cp) > 29000) {
+    const plies = 30000 - Math.abs(cp);
+    return (cp > 0 ? "+" : "-") + "M" + Math.max(1, Math.ceil(plies / 2));
+  }
+  return (cp >= 0 ? "+" : "") + (cp / 100).toFixed(2);
+}
+
+function statusText() {
+  if (!S) return "Press New game to start.";
+  if (S.over) {
+    let who;
+    if (S.result === "1/2-1/2") who = "Draw";
+    else who = ((S.result === "1-0") === (S.human === "w")) ? "You won" : "Jewel won";
+    return who + " (" + S.result + ", " + S.reason + ")";
+  }
+  return S.turn === S.human ? "Your move." : "Jewel to move.";
+}
+
+/* ------------------------------------------------------------------ board */
+function renderBoard() {
+  const el = $("board");
+  el.innerHTML = "";
+  if (!S) return;
+  const b = parseFen(S.fen);
+  const white = S.human === "w";
+  const last = S.last || "";
+  const targets = sel ? S.legal.filter(m => m.slice(0, 2) === sel).map(m => m.slice(2, 4)) : [];
+  const showAtt = $("tAtt").checked;
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      const rank = white ? 7 - r : r, file = white ? c : 7 - c;
+      const sq = FILES[file] + (rank + 1);
+      const d = document.createElement("div");
+      d.className = "sq " + (((rank + file) % 2 === 0) ? "dark" : "light");
+      if (sq === sel) d.classList.add("sel");
+      else if (last && (sq === last.slice(0, 2) || sq === last.slice(2, 4))) d.classList.add("last");
+      if (targets.includes(sq)) d.classList.add("tgt");
+      if (showAtt) {
+        const a = S.att[rank * 8 + file];
+        if (a === "1") d.classList.add("aw");
+        else if (a === "2") d.classList.add("ab");
+        else if (a === "3") d.classList.add("awb");
+      }
+      const p = b[rank][file];
+      if (p) {
+        const s = document.createElement("span");
+        s.className = "pc " + (p === p.toUpperCase() ? "w" : "b");
+        s.textContent = GLYPH[p.toLowerCase()] + "︎";
+        d.appendChild(s);
+      }
+      if (c === 0) { const t = document.createElement("span"); t.className = "co rk"; t.textContent = String(rank + 1); d.appendChild(t); }
+      if (r === 7) { const t = document.createElement("span"); t.className = "co fl"; t.textContent = FILES[file]; d.appendChild(t); }
+      d.onclick = () => clickSq(sq);
+      el.appendChild(d);
+    }
+  }
+  $("legend").textContent = showAtt
+    ? "Attack map: blue = squares White attacks, red = squares Black attacks, purple = both (from Jewel's is_square_attacked)."
+    : "";
+}
+
+/* ------------------------------------------------------------------ eval bar */
+function renderEvalBar() {
+  if (!S) { $("ebLabel").textContent = ""; $("ebTop").style.height = "50%"; return; }
+  const cp = S.search_cp !== null ? S.search_cp : S.static_cp;
+  const pWhite = 1 / (1 + Math.exp(-Math.max(-3000, Math.min(3000, cp)) / 400));
+  const top = S.human === "w" ? (1 - pWhite) : pWhite;
+  $("ebTop").style.height = (top * 100).toFixed(1) + "%";
+  // keep white at the bottom when we play white, at the top when we play black
+  $("evalbar").style.flexDirection = S.human === "w" ? "column" : "column-reverse";
+  $("ebTop").style.background = S.human === "w" ? "#1c1c1c" : "#f2f2f2";
+  $("ebBot").style.background = S.human === "w" ? "#f2f2f2" : "#1c1c1c";
+  $("ebLabel").textContent = fmtScore(cp);
+}
+
+/* ------------------------------------------------------------------ arrows (Jewel's view of your moves) */
+function drawArrows() {
+  const svg = $("arrows");
+  svg.innerHTML = "";
+  if (!S || !A || A.fen !== S.fen || !$("tCand").checked) return;
+  const white = S.human === "w";
+  const top = A.moves.slice(0, 5);
+  if (!top.length) return;
+  const best = top[0].s;
+  const center = sq => {
+    const f = FILES.indexOf(sq[0]), r = parseInt(sq[1]) - 1;
+    return [(white ? f : 7 - f) * 100 + 50, (white ? 7 - r : r) * 100 + 50];
+  };
+  let html = "";
+  top.forEach((mv, i) => {
+    const [x1, y1] = center(mv.m.slice(0, 2));
+    const [x2, y2] = center(mv.m.slice(2, 4));
+    const t = Math.min(1, Math.max(0, (best - mv.s) / 300));
+    const col = "rgb(" + Math.round(46 + (231 - 46) * t) + "," + Math.round(204 + (76 - 204) * t) + "," + Math.round(113 + (60 - 113) * t) + ")";
+    const w = i === 0 ? 14 : 9;
+    const ang = Math.atan2(y2 - y1, x2 - x1);
+    const hl = 34;
+    const ex = x2 - Math.cos(ang) * hl * 0.8, ey = y2 - Math.sin(ang) * hl * 0.8;
+    const hx1 = x2 - Math.cos(ang - 0.45) * hl, hy1 = y2 - Math.sin(ang - 0.45) * hl;
+    const hx2 = x2 - Math.cos(ang + 0.45) * hl, hy2 = y2 - Math.sin(ang + 0.45) * hl;
+    html += '<g opacity="0.8"><line x1="' + x1 + '" y1="' + y1 + '" x2="' + ex + '" y2="' + ey + '" stroke="' + col + '" stroke-width="' + w + '" stroke-linecap="round"/>' +
+            '<polygon points="' + x2 + ',' + y2 + ' ' + hx1 + ',' + hy1 + ' ' + hx2 + ',' + hy2 + '" fill="' + col + '"/></g>';
+    if (i < 3) {
+      html += '<text x="' + x2 + '" y="' + (y2 + 6) + '" text-anchor="middle" font-size="30" font-weight="700" fill="#fff" stroke="#000" stroke-width="5" paint-order="stroke" font-family="Consolas, monospace">' + fmtScore(mv.s) + '</text>';
+    }
+  });
+  svg.innerHTML = html;
+  $("legend").textContent = ($("tAtt").checked ? "Blue/red/purple: attack map. " : "") +
+    "Arrows: Jewel's depth-" + A.depth + " score for each of your best 5 moves, from your side's view (green = best).";
+}
+
+async function refreshAnalysis() {
+  if (!$("tCand").checked || !S || S.over || S.turn !== S.human) { A = null; drawArrows(); return; }
+  const fen = S.fen;
+  const r = await api("/api/analyze?depth=" + $("cDepth").value);
+  if (r.error || !S || S.fen !== fen) return;
+  A = r; A.fen = fen;
+  drawArrows();
+}
+
+function toggleChanged() {
+  renderBoard();
+  if ($("tCand").checked) refreshAnalysis(); else { A = null; drawArrows(); }
+}
+
+/* ------------------------------------------------------------------ side panels */
+function renderThink() {
+  const el = $("think");
+  if (!S || !S.think.length) {
+    el.innerHTML = '<div class="hint">' + (S && S.info ? S.info : "Jewel hasn't moved yet.") + '</div>';
+    return;
+  }
+  const maxLog = Math.max(...S.think.map(t => Math.log10(t.ms + 1)), 0.01);
+  let h = "<table><tr><th>depth</th><th>move</th><th>score</th><th>ms</th><th>x prev</th><th></th></tr>";
+  S.think.forEach((t, i) => {
+    const ratio = i === 0 ? "" : (t.ms / Math.max(S.think[i - 1].ms, 0.01)).toFixed(1);
+    const wpx = Math.max(2, Math.round(100 * Math.log10(t.ms + 1) / maxLog));
+    h += "<tr><td>" + t.d + "</td><td>" + t.m + "</td><td>" + fmtScore(t.s) + "</td><td>" + t.ms.toFixed(1) +
+         "</td><td>" + ratio + '</td><td style="width:70px"><div class="bar" style="width:' + wpx + '%"></div></td></tr>';
+  });
+  h += "</table><div class=\"hint\">Scores are from Jewel's own point of view.</div>";
+  el.innerHTML = h;
+}
+
+function renderGraph() {
+  const el = $("graph");
+  if (!S || S.static_series.length < 2) { el.innerHTML = '<div class="hint">Play a few moves.</div>'; return; }
+  const W = 320, H = 120, n = S.static_series.length;
+  const X = i => 8 + (W - 16) * i / Math.max(1, n - 1);
+  const Y = cp => H / 2 - Math.max(-600, Math.min(600, cp)) / 600 * (H / 2 - 8);
+  let path = "";
+  S.static_series.forEach((v, i) => { path += (i === 0 ? "M" : "L") + X(i).toFixed(1) + "," + Y(v).toFixed(1) + " "; });
+  let svg = '<svg viewBox="0 0 ' + W + " " + H + '">' +
+            '<line x1="0" y1="' + H / 2 + '" x2="' + W + '" y2="' + H / 2 + '" stroke="#3c414a" stroke-dasharray="4 4"/>' +
+            '<path d="' + path + '" fill="none" stroke="#8b94a3" stroke-width="2"/>';
+  S.search_series.forEach((v, i) => {
+    if (v !== null) svg += '<circle cx="' + X(i).toFixed(1) + '" cy="' + Y(v).toFixed(1) + '" r="4" fill="#4aa3ff"/>';
+  });
+  svg += "</svg>";
+  el.innerHTML = svg;
+}
+
+function renderFeatures() {
+  const el = $("feat");
+  if (!S) { el.innerHTML = ""; return; }
+  let total = 0;
+  let h = "<table><tr><th>piece</th><th>W - B</th><th>weight</th><th>contribution</th></tr>";
+  for (let i = 0; i < S.features.length; i++) {
+    const c = S.features[i] * S.weights[i];
+    total += c;
+    h += "<tr><td>" + PNAMES[i] + "</td><td>" + S.features[i] + "</td><td>" + S.weights[i] + "</td><td>" + c + "</td></tr>";
+  }
+  h += "<tr><th>total (White)</th><th></th><th></th><th>" + total + "</th></tr></table>";
+  el.innerHTML = h;
+}
+
+function renderOrder() {
+  const el = $("order");
+  if (!S) { el.innerHTML = ""; return; }
+  const rows = S.order.slice(0, 14);
+  let h = "<table><tr><th>#</th><th>move</th><th>kind</th><th>order score</th></tr>";
+  rows.forEach((m, i) => { h += "<tr><td>" + (i + 1) + "</td><td>" + m.m + "</td><td>" + m.k + "</td><td>" + m.s + "</td></tr>"; });
+  h += "</table>";
+  if (S.order.length > rows.length) h += '<div class="hint">... and ' + (S.order.length - rows.length) + " more quiet moves.</div>";
+  el.innerHTML = h;
+}
+
+function renderBitboards() {
+  const el = $("bbs");
+  el.innerHTML = "";
+  if (!S) return;
+  for (const name of Object.keys(S.bb)) {
+    const hex = S.bb[name];
+    const v = BigInt("0x" + hex);
+    let svg = '<svg viewBox="0 0 80 80">';
+    for (let i = 0; i < 64; i++) {
+      const rank = Math.floor(i / 8), file = i % 8;
+      const on = ((v >> BigInt(i)) & 1n) === 1n;
+      const dark = (rank + file) % 2 === 0;
+      svg += '<rect x="' + file * 10 + '" y="' + (7 - rank) * 10 + '" width="10" height="10" fill="' + (on ? "#4aa3ff" : (dark ? "#2a2e35" : "#20232a")) + '"/>';
+    }
+    svg += "</svg>";
+    const cell = document.createElement("div");
+    cell.className = "bbcell";
+    cell.innerHTML = svg + "<div>" + name + "</div><div>" + hex.slice(0, 8) + "<br>" + hex.slice(8) + "</div>";
+    el.appendChild(cell);
+  }
+}
+
+function render() {
+  $("status").textContent = statusText();
+  $("info").textContent = S && S.info ? "Jewel: " + S.info : "";
+  const mv = $("moves");
+  if (S) {
+    const out = [];
+    for (let i = 0; i < S.moves.length; i++) {
+      if (i % 2 === 0) out.push((i / 2 + 1) + ".");
+      out.push(S.moves[i]);
+    }
+    mv.textContent = out.join(" ");
+    mv.scrollTop = mv.scrollHeight;
+  } else {
+    mv.textContent = "";
+  }
+  renderBoard();
+  renderEvalBar();
+  drawArrows();
+  renderThink();
+  renderGraph();
+  renderFeatures();
+  renderOrder();
+  renderBitboards();
+}
+
+/* ------------------------------------------------------------------ playing */
+function askPromotion(cand) {
+  return new Promise(res => {
+    const box = $("promo");
+    box.innerHTML = "";
+    box.style.display = "flex";
+    const names = { q:"Queen", r:"Rook", b:"Bishop", n:"Knight" };
+    for (const m of cand) {
+      const bt = document.createElement("button");
+      bt.textContent = names[m[4]];
+      bt.onclick = () => { box.style.display = "none"; res(m); };
+      box.appendChild(bt);
+    }
+  });
+}
+
+async function clickSq(sq) {
+  if (!S || S.over || busy || S.turn !== S.human) return;
+  const mine = S.legal.filter(m => m.slice(0, 2) === sq);
+  if (mine.length) { sel = sq; renderBoard(); return; }
+  if (sel) {
+    const cand = S.legal.filter(m => m.slice(0, 2) === sel && m.slice(2, 4) === sq);
+    if (cand.length === 0) { sel = null; renderBoard(); return; }
+    let uci = cand[0];
+    if (cand.length > 1) uci = await askPromotion(cand);
+    sel = null;
+    await play(uci);
+  }
+}
+
+async function play(uci) {
+  busy = true; A = null;
+  const r = await api("/api/move?uci=" + uci);
+  if (r.error) { $("status").textContent = r.error; busy = false; render(); return; }
+  S = r; render();
+  if (!S.over) await engineTurn();
+  busy = false;
+  await refreshAnalysis();
+}
+
+async function engineTurn() {
+  $("status").textContent = "Jewel is thinking...";
+  const r = await api("/api/engine");
+  if (r.error) { $("status").textContent = r.error; return; }
+  S = r; render();
+}
+
+async function newGame() {
+  let color = document.querySelector("input[name=color]:checked").value;
+  if (color === "r") color = Math.random() < 0.5 ? "w" : "b";
+  const ms = $("ms").value;
+  sel = null; A = null; busy = true;
+  const r = await api("/api/new?color=" + color + "&ms=" + ms);
+  if (r.error) { $("status").textContent = r.error; busy = false; return; }
+  S = r; render();
+  if (S.human === "b") await engineTurn();
+  busy = false;
+  await refreshAnalysis();
+}
+
+async function resign() {
+  if (!S || S.over || busy) return;
+  const r = await api("/api/resign");
+  if (!r.error) { S = r; sel = null; A = null; render(); }
+}
+
+(async function init() {
+  const r = await api("/api/state");
+  if (!r.error) {
+    S = r; render();
+    if (!S.over && S.turn !== S.human) { busy = true; await engineTurn(); busy = false; }
+    await refreshAnalysis();
+  } else {
+    render();
+  }
+})();
+</script>
+</body>
+</html>
